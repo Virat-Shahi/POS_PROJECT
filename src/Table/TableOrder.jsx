@@ -1,6 +1,10 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import menuStore from '../Store/menuStore';
+import orderStore from '../Store/orderStore';
+import useUserStore from '../Store/userStore';
+import Order from '../Order/Order';
 
 const TableOrder = () => {
     const { tableId } = useParams();
@@ -9,6 +13,7 @@ const TableOrder = () => {
     const menuItems = menuStore((state) => state.menuItems);
     const categories = menuStore((state) => state.categories);
     const getCategories = menuStore((state) => state.getCategories);
+    const addToOrder = orderStore((state) => state.addToOrder);
     const [currentCategory, setCurrentCategory] = useState('All');
 
     useEffect(() => {
@@ -24,12 +29,18 @@ const TableOrder = () => {
         navigate('/'); // Assuming '/' is the route for the table page
     };
 
+    const hdlAddToOrder = (item) => {
+        addToOrder(tableId,item);
+    };
+    
     let filteredItems = menuItems;
     if (currentCategory !== 'All') {
         filteredItems = menuItems.filter(
             (item) => item.category?.name === currentCategory
         );
     }
+
+
 
     return (
         <div className="flex flex-col p-6 bg-red-50 min-h-screen">
@@ -56,9 +67,9 @@ const TableOrder = () => {
                             onClick={() => hdlCategory('All')}
                             className={`px-4 py-2 rounded-full font-semibold transition duration-300 whitespace-nowrap
                             ${currentCategory === 'All'
-                                ? 'bg-red-500 text-white hover:bg-red-600'
-                                : 'bg-red-100 text-red-800 hover:bg-red-200'
-                            }`}
+                                    ? 'bg-red-500 text-white hover:bg-red-600'
+                                    : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                }`}
                         >
                             All
                         </button>
@@ -69,9 +80,9 @@ const TableOrder = () => {
                                 onClick={() => hdlCategory(category.name)}
                                 className={`px-4 py-2 rounded-full font-semibold transition duration-300 whitespace-nowrap
                                 ${category.name === currentCategory
-                                    ? 'bg-red-500 text-white hover:bg-red-600'
-                                    : 'bg-red-100 text-red-800 hover:bg-red-200'
-                                }`}
+                                        ? 'bg-red-500 text-white hover:bg-red-600'
+                                        : 'bg-red-100 text-red-800 hover:bg-red-200'
+                                    }`}
                             >
                                 {category.name}
                             </button>
@@ -106,7 +117,8 @@ const TableOrder = () => {
                                                 {item.category?.name}
                                             </span>
                                         </div>
-                                        <button className="w-full mt-3 bg-red-500 hover:bg-red-600 text-white py-3 text-xl font-bold px-4 rounded transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300">
+                                        <button onClick={() => hdlAddToOrder(item)}
+                                            className="w-full mt-3 bg-red-500 hover:bg-red-600 text-white py-3 text-xl font-bold px-4 rounded transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300">
                                             Add to Order
                                         </button>
                                     </div>
@@ -117,19 +129,12 @@ const TableOrder = () => {
                 </div>
 
                 {/* Right section: Current Order */}
-                <div className="w-full md:w-1/4 md:sticky md:top-6 md:self-start">
-                    <div className="bg-white p-6 rounded-lg shadow-md">
-                        <h2 className="text-2xl font-bold mb-4 text-red-800">Current Order</h2>
-                        {/* Placeholder for order items */}
-                        <div className="space-y-4">
-                            <p className="text-gray-600">No items in the order yet.</p>
-                            {/* This is where the items added to the order will go */}
-                        </div>
-                    </div>
-                </div>
+                <Order />
             </div>
         </div>
     );
 };
 
 export default TableOrder;
+
+
