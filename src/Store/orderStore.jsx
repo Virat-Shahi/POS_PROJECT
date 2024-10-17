@@ -68,9 +68,32 @@ const orderStore = create(persist((set) => ({
             console.log(error)
         }
     },
+
+    removeItem: (tableId, itemId) => {
+        set(state => ({
+            tableOrders: {
+                ...state.tableOrders, [tableId]: state.tableOrders[tableId].filter(el => el.id !== itemId)
+            }
+        }))
+    },
     resetOrder: () => {
         set({ orderItems: [] })
-    }
+    },
+
+    processPayment: async (tableId, orderId, paymentMethod, amount) => {
+        try {
+            const response = await axios.post("http://localhost:3000/payment", {
+                orderId,
+                paymentMethod,
+                amount
+            });
+            console.log("Payment response:", response.data);
+            // return response.data;
+        } catch (error) {
+            console.error("Error processing payment:", error);
+            return { error: error.message };
+        }
+    },
 
 }), {
     name: 'orderStore',
