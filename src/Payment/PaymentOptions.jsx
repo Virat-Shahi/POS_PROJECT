@@ -1,14 +1,50 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
+import { useParams } from 'react-router-dom';
+import tableStore from '../Store/tableStore';
 
-const PaymentOptions = ({ onClose, totalAmount }) => {
+const PaymentOptions = ({ onClose, totalAmount, hdlInitiatePayment, hdlProcessPayment }) => {
+
+    const { tableId } = useParams();
     const [selectedMethod, setSelectedMethod] = useState(null);
     const [showQRCode, setShowQRCode] = useState(false);
+    const [showPaymentConfirmation, setShowPaymentConfirmation] = useState(false);
+    const [paymentId, setPaymentId] = useState(null);
+    const actionUpdateTable = tableStore((state) => state.actionUpdateTable);
 
     const hdlQRclick = () => {
         setSelectedMethod('QR');
         setShowQRCode(true);
     }
+
+    const hdlConfirmPayment = async () => {
+        try {
+            if (selectedMethod) {
+                const id = await hdlInitiatePayment(selectedMethod);  // Show the confirmation modal
+                console.log("ID from hdlConfirmPayment: ", id)
+                setPaymentId(id);  // Store the payment ID
+                setShowPaymentConfirmation(true);
+            }
+        } catch (error) {
+            console.log("Error initiating payment:", error)
+        }
+    }
+
+
+    const hdlPaymentConfirmation = (received) => {
+        setShowPaymentConfirmation(false);
+        if (received) {
+            hdlProcessPayment(paymentId);
+            // Update table status to occupied
+            actionUpdateTable(tableId, false);
+            onClose();
+        } else {
+            // Reset selected method if payment was not received
+            setSelectedMethod(null);
+            setPaymentId(null);
+        }
+    }
+
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
             <div className="bg-white rounded-lg p-6 w-full max-w-md">
@@ -34,6 +70,7 @@ const PaymentOptions = ({ onClose, totalAmount }) => {
                     </button>
                 </div>
                 <button
+                    onClick={hdlConfirmPayment}
                     className="w-full mt-6 bg-green-500 hover:bg-green-600 text-white py-3 text-xl font-bold rounded transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300"
                     disabled={!selectedMethod}
                 >
@@ -51,6 +88,28 @@ const PaymentOptions = ({ onClose, totalAmount }) => {
                             >
                                 Close QR Code
                             </button>
+                        </div>
+                    </div>
+                )}
+
+                {showPaymentConfirmation && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                        <div className="bg-white p-8 rounded-lg shadow-lg w-96">
+                            <h3 className="text-2xl font-bold mb-6 text-red-600">Payment Received?</h3>
+                            <div className="flex justify-between space-x-6">
+                                <button
+                                    onClick={() => hdlPaymentConfirmation(false)}
+                                    className="w-full py-3 bg-red-500 text-white text-lg rounded hover:bg-red-600 transition duration-300"
+                                >
+                                    No
+                                </button>
+                                <button
+                                    onClick={() => hdlPaymentConfirmation(true)}
+                                    className="w-full py-3 bg-green-500 text-white text-lg rounded hover:bg-green-600 transition duration-300"
+                                >
+                                    Yes
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

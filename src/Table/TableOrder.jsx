@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import menuStore from '../Store/menuStore';
 import orderStore from '../Store/orderStore';
-import useUserStore from '../Store/userStore';
 import Order from '../Order/Order';
+
 
 const TableOrder = () => {
     const { tableId } = useParams();
@@ -15,7 +15,8 @@ const TableOrder = () => {
     const getCategories = menuStore((state) => state.getCategories);
     const addToOrder = orderStore((state) => state.addToOrder);
     const [currentCategory, setCurrentCategory] = useState('All');
-
+    const tableOrders = orderStore((state) => state.tableOrders);
+    const [isModified, setIsModified] = useState(false);
     useEffect(() => {
         actionMenu();
         getCategories();
@@ -26,11 +27,18 @@ const TableOrder = () => {
     };
 
     const handleExit = () => {
-        navigate('/'); // Assuming '/' is the route for the table page
+        if(tableOrders[tableId].length === 0){
+            navigate('/')
+        }else{
+            if (window.confirm("There's an existing order. Are you sure you want to exit without placing the order?")) {
+                navigate('/');
+            }
+        }
     };
 
     const hdlAddToOrder = (item) => {
         addToOrder(tableId,item);
+        setIsModified(true);
     };
     
     let filteredItems = menuItems;
@@ -129,7 +137,7 @@ const TableOrder = () => {
                 </div>
 
                 {/* Right section: Current Order */}
-                <Order />
+                <Order isModified={isModified} setIsModified={setIsModified} />
             </div>
         </div>
     );

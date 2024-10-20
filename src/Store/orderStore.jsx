@@ -2,7 +2,7 @@ import axios from "axios";
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 
-const orderStore = create(persist((set) => ({
+const orderStore = create(persist((set, get) => ({
     tableOrders: {},
 
     addToOrder: (tableId, item) => {
@@ -31,7 +31,6 @@ const orderStore = create(persist((set) => ({
             }
         })
     },
-
 
     increaseQuantity: (tableId, itemId) => {
         set(state => ({
@@ -63,12 +62,52 @@ const orderStore = create(persist((set) => ({
                     Authorization: `Bearer ${token}`
                 }
             })
-            console.log(resp)
+            console.log(resp.data)
+
+            //store the new orderId
+
+            return resp.data
+
         } catch (error) {
             console.log(error)
         }
     },
+    actionUpdateOrder: async (token, orderId, tableId, updatedItems) => {
+        try {
+            console.log("Updating order:", { orderId, tableId, updatedItems });
+            const orderItemsForBackend = updatedItems.map(item => ({
+                id: item.id,
+                quantity: item.quantity,
+                price: item.price
+            }));
 
+            const data = JSON.stringify(orderItemsForBackend);
+            console.log("Sending data to backend:", data);
+
+            const resp = await axios.put(`http://localhost:3000/orders/${orderId}`,
+                { tableId, order: data },
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`
+                    }
+                }
+            );
+
+            console.log("Update response:", resp.data);
+
+            set(state => ({
+                tableOrders: {
+                    ...state.tableOrders,
+                    [tableId]: updatedItems
+                }
+            }));
+
+            return resp.data;
+        } catch (error) {
+            console.error("Error updating order:", error.response ? error.response.data : error.message);
+            throw error;
+        }
+    },
     removeItem: (tableId, itemId) => {
         set(state => ({
             tableOrders: {
@@ -76,25 +115,73 @@ const orderStore = create(persist((set) => ({
             }
         }))
     },
-    resetOrder: () => {
-        set({ orderItems: [] })
+    resetTableOrder: (tableId) => {
+        set(state => ({
+            tableOrders: {
+                ...state.tableOrders,
+                [tableId]: []
+            },
+
+        }));
     },
 
-    processPayment: async (tableId, orderId, paymentMethod, amount) => {
+    initiatePayment: async (tableId, orderId, paymentMethod, amount) => {
         try {
-            const response = await axios.post("http://localhost:3000/payment", {
+            const resp = await axios.post("http://localhost:3000/payment/initiate", {
                 orderId,
                 paymentMethod,
                 amount
-            });
-            console.log("Payment response:", response.data);
-            // return response.data;
+            })
+            console.log(resp.data)
+            set(state => ({
+                tableOrders: {
+                    ...state.tableOrders, [tableId]: state.tableOrders[tableId].map(el =>
+                        el.id === orderId ? { ...el, paymentStatus: "Processing" } : el
+                    )
+                }
+            }));
+            return resp.data.payment.id
         } catch (error) {
-            console.error("Error processing payment:", error);
-            return { error: error.message };
+            console.log(error)
         }
     },
 
+    processPayment: async (tableId, orderId, paymentId) => {
+        console.log(paymentId)
+
+        try {
+            console.log("Processing Payment with IDs", paymentId)
+
+            if (!paymentId) {
+                console.log("Invalid payment ID")
+            }
+            const resp = await axios.post(`http://localhost:3000/payment/process/${paymentId}`);
+            console.log(resp.data)
+
+            if (resp.data.status === "Completed") {
+                set(state => ({
+                    tableOrders: {
+                        ...state.tableOrders, [tableId]: state.tableOrders[tableId].map(el =>
+                            el.id === orderId ? { ...el, paymentStatus: "Completed" } : el
+                        )
+                    }
+                }))
+            }
+
+            get().resetTableOrder(tableId)
+            return true;
+        } catch (error) {
+            console.error("Error processing payment:", error);
+
+            set(state => ({
+                tableOrders: {
+                    ...state.tableOrders, [tableId]: state.tableOrders[tableId].map(el =>
+                        el.id === orderId ? { ...el, paymentStatus: "Failed" } : el
+                    )
+                }
+            }))
+        }
+    },
 }), {
     name: 'orderStore',
     storage: createJSONStorage(() => localStorage)

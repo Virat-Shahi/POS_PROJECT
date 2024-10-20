@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import orderStore from '../Store/orderStore';
 import useUserStore from '../Store/userStore';
 import { useParams } from 'react-router-dom';
@@ -7,7 +7,8 @@ import { toast } from 'react-toastify';
 import PaymentOptions from '../Payment/PaymentOptions';
 
 
-const Order = () => {
+const Order = (props) => {
+  const {isModified,setIsModified} = props
 
   const { tableId } = useParams();
   const createOrder = orderStore((state => state.actionCreateOrder))
@@ -18,9 +19,11 @@ const Order = () => {
   const actionUpdateTable = tableStore((state) => state.actionUpdateTable);
   const removeItem = orderStore((state) => state.removeItem)
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const processPayment = orderStore((state) => state.processPayment)
-
-  const hdlPlaceOrder = (token, tableId, tableOrders) => {
+  const [currentOrderId, setCurrentOrderId] = useState(null);
+  const initiatePayment = orderStore((state) => state.initiatePayment);
+  const processPayment = orderStore((state) => state.processPayment);
+  const actionUpdateOrder = orderStore((state) => state.actionUpdateOrder);
+  const hdlPlaceOrder = async (token, tableId, tableOrders) => {
     try {
       // Validation If no items in the order
       if (!tableOrders || tableOrders.length === 0) {
@@ -28,12 +31,17 @@ const Order = () => {
         return;
       }
       // Place the order
-      const order = createOrder(token, tableId, tableOrders)
+      const order = await createOrder(token, tableId, tableOrders)
+      console.log(order)
 
-      // Update table status to occupied
       if (order) {
+        // Update table status to occupied
         actionUpdateTable(tableId, true);
-        // Show a success message
+        // Set the current order ID
+        setCurrentOrderId(order.id)
+        // Reset the modified flag
+        setIsModified(false);
+        console.log("Current Order ID set to:", order.id);
         toast.success("Order placed successfully and table marked as occupied.");
       }
     } catch (error) {
@@ -42,10 +50,49 @@ const Order = () => {
     }
   }
 
+  const hdlUpdateOrder = async () => {
+    try {
+      if (!currentOrderId) {
+        toast.error("Cannot find order Id. Please add items in order first.")
+        return
+      }
+      if (!tableOrders || tableOrders.length === 0) {
+        toast.error("Cannot update an empty order. Please add items to your order.")
+        return
+      }
+      if (!isModified) {
+        toast.info("No changes detected in the order.")
+        return
+      }
+      const result = await actionUpdateOrder(token, currentOrderId, tableId, tableOrders)
+      if (result) {
+        toast.success("Order updated successfully.")
+        setIsModified(false); // Reset the modified flag after successful update
+      } else {
+        toast.error("Failed to update order. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error updating order:", error);
+      toast.error(`Error updating order: ${error.message}`);
+    }
+  }
+
   const hdlRemoveItem = (tableId, itemId) => {
     removeItem(tableId, itemId)
+    setIsModified
     toast.success("Item removed from the order.")
   }
+
+  const hdlIncreaseQuantity = (tableId, itemId) => {
+    increaseQuantity(tableId, itemId);
+    setIsModified(true);
+  }
+
+  const hdlDecreaseQuantity = (tableId, itemId) => {
+    decreaseQuantity(tableId, itemId);
+    setIsModified(true);
+  }
+
 
   const hdlCheckout = () => {
     if (tableOrders && tableOrders.length > 0) {
@@ -56,32 +103,50 @@ const Order = () => {
     }
   }
 
-  const hdlPayment = (paymentMethod) => {
-    if(tableOrders.length === 0){
+
+  const totalAmount = tableOrders?.reduce((acc, item) => acc + (item.price * item.quantity), 0)
+  const hdlInitiatePayment = async (paymentMethod) => {
+    if (!tableOrders && tableOrders.length > 0) {
       toast.error("Cannot checkout an empty order. Please add items to your order.")
     }
 
-    // Assuming the first order in tableOrders is the current order
-    const currentOrder = tableOrders[0];
-    const orderId = currentOrder.id;
-    const amount = currentOrder.totalAmount
-  
+    if (!currentOrderId) {
+      toast.error("Cannot find order Id. Please add items in order first.")
+      return
+    }
 
-  if(!orderId){
-    toast.error("Cannot checkout an empty order. Please add items to your order.")
-    return
+    try {
+      const paymentId = await initiatePayment(tableId, currentOrderId, paymentMethod, totalAmount)
+      console.log(paymentId)
+      if (!paymentId) {
+        toast.error("An error occurred while initiating payment. Please try again.")
+        return
+      }
+      toast.success("Payment processed successfully.")
+      return paymentId
+    } catch (error) {
+      console.error("Error initiating payment:", error);
+      toast.error("An error occurred while initiating payment. Please try again.");
+    }
+
   }
 
-  const result = processPayment(tableId,orderId,paymentMethod,amount)
-  if(result.error){
-    toast.error(result.error)
-  } else {
-    toast.success("Payment processed successfully.")
-    setShowPaymentOptions(false)
+  const hdlProcessPayment = async (paymentId) => {
+    try {
+      const success = await processPayment(tableId, currentOrderId, paymentId)
+      console.log("SOmething here", success)
+      if (success) {
+        toast.success("Payment processed successfully.")
+      }
+      else {
+        toast.error("An error occurred while processing payment. Please try again.")
+      }
+    } catch (error) {
+      console.error("Error processing payment:", error);
+      toast.error("An error occurred while processing payment. Please try again.");
+    }
   }
 
-
-  const totalAmount = tableOrders?.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   // console.log(tableOrders)
   return (
     <div className="w-full md:w-1/4 md:sticky md:top-6 md:self-start">
@@ -101,14 +166,14 @@ const Order = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => decreaseQuantity(tableId, item.id)}
+                      onClick={() => hdlDecreaseQuantity(tableId, item.id)}
                       className="bg-red-100 text-red-600 hover:bg-red-200 font-bold py-1 px-2 rounded"
                     >
                       -
                     </button>
                     <span className="font-semibold">{item.quantity}</span>
                     <button
-                      onClick={() => increaseQuantity(tableId, item.id)}
+                      onClick={() => hdlIncreaseQuantity(tableId, item.id)}
                       className="bg-red-100 text-red-600 hover:bg-red-200 font-bold py-1 px-2 rounded"
                     >
                       +
@@ -139,6 +204,16 @@ const Order = () => {
           >
             Place Order
           </button>
+          <button
+            onClick={() => hdlUpdateOrder(token, currentOrderId, tableId, tableOrders)}
+            disabled={!currentOrderId || !isModified}
+            className={`w-full py-3 text-xl font-bold px-4 rounded transition duration-300 
+              ${currentOrderId && isModified
+                ? "bg-blue-500 hover:bg-blue-600 text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
+          >
+            Update Order
+          </button>
         </div>
       </div>
       <div className='w-full'>
@@ -146,8 +221,14 @@ const Order = () => {
           <h2 className='text-red-800 text-2xl font-bold' >Order Summary: </h2>
 
           <p className='text-red-600 text-xl mt-3 font-semibold'>Total: ฿{totalAmount.toFixed(2)}</p>
-          <button onClick={hdlCheckout}
-            className="w-full mt-4 bg-red-600 hover:bg-green-500 text-white py-3 text-xl font-bold px-4 rounded-xl transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300">
+          <button
+            onClick={hdlCheckout}
+            disabled={tableOrders?.length === 0}
+            className={`w-full mt-4 ${tableOrders?.length > 0
+              ? "bg-red-600 hover:bg-green-500"
+              : "bg-gray-400 cursor-not-allowed"
+              } text-white py-3 text-xl font-bold px-4 rounded-xl transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300`}
+          >
             Check Out
           </button>
         </div>
@@ -156,10 +237,14 @@ const Order = () => {
       {
         showPaymentOptions && <PaymentOptions
           onClose={() => setShowPaymentOptions(false)}
-          totalAmount={totalAmount} />
+          totalAmount={totalAmount}
+          hdlInitiatePayment={hdlInitiatePayment}
+          hdlProcessPayment={hdlProcessPayment} />
       }
     </div>
+
+
   )
 }
-}
+
 export default Order
