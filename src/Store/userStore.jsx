@@ -29,4 +29,10 @@ const useUserStore = create(persist((set) => ({
     storage: createJSONStorage(() => localStorage)
 }))
 
+const token = useUserStore.getState().token
+
+if(token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`
+}
+
 export default useUserStore

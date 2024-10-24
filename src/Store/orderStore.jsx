@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware'
 
 const orderStore = create(persist((set, get) => ({
     tableOrders: {},
+    currentOrderId: null,
 
     addToOrder: (tableId, item) => {
         set(state => {
@@ -64,7 +65,8 @@ const orderStore = create(persist((set, get) => ({
             })
             console.log(resp.data)
 
-            //store the new orderId
+            // Update the currentOrderId with the new order ID
+            set({ currentOrderId: resp.data.id })
 
             return resp.data
 
@@ -72,40 +74,54 @@ const orderStore = create(persist((set, get) => ({
             console.log(error)
         }
     },
+    SetCurrentOrderId: (currentOrderId) => {
+        set(state => (currentOrderId ? { currentOrderId } : { currentOrderId: null }));
+    },
+
     actionUpdateOrder: async (token, orderId, tableId, updatedItems) => {
         try {
-            console.log("Updating order:", { orderId, tableId, updatedItems });
-            const orderItemsForBackend = updatedItems.map(item => ({
-                id: item.id,
-                quantity: item.quantity,
-                price: item.price
-            }));
-
-            const data = JSON.stringify(orderItemsForBackend);
-            console.log("Sending data to backend:", data);
-
-            const resp = await axios.put(`http://localhost:3000/orders/${orderId}`,
-                { tableId, order: data },
+            const resp = await axios.put(
+                `http://localhost:3000/orders/${orderId}`,
                 {
-                    headers: {
-                        Authorization: `Bearer ${token}`
-                    }
+                    tableId,
+                    order: JSON.stringify(updatedItems)  // Send everything and let backend handle it
+                },
+                {
+                    headers: { Authorization: `Bearer ${token}` }
                 }
             );
 
-            console.log("Update response:", resp.data);
-
-            set(state => ({
-                tableOrders: {
-                    ...state.tableOrders,
-                    [tableId]: updatedItems
-                }
-            }));
+            // Update local state if successful
+            if (resp.data) {
+                set(state => ({
+                    tableOrders: {
+                        ...state.tableOrders,
+                        [tableId]: updatedItems
+                    }
+                }));
+            }
 
             return resp.data;
         } catch (error) {
-            console.error("Error updating order:", error.response ? error.response.data : error.message);
+            console.log("error updating order:", error);
             throw error;
+        }
+    },
+
+    actionDeleteOrder: async (token, orderId, tableId) => {
+        try {
+            const resp = await axios.delete(`http://localhost:3000/orders/${orderId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            })
+            console.log("Delete Order Response", resp.data)
+
+            // reset the table order
+            get().resetTableOrder(tableId);
+        } catch (error) {
+            console.log("Error deleting order:", error)
+            throw error
         }
     },
     removeItem: (tableId, itemId) => {
@@ -121,10 +137,23 @@ const orderStore = create(persist((set, get) => ({
                 ...state.tableOrders,
                 [tableId]: []
             },
+            currentOrderId: null
 
         }));
     },
-
+    getOrders: async (token) => {
+        try {
+            const resp = await axios.get("http://localhost:3000/orders", {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            return resp.data;
+        } catch (error) {
+            console.error("Error fetching orders:", error);
+            throw error;
+        }
+    },
     initiatePayment: async (tableId, orderId, paymentMethod, amount) => {
         try {
             const resp = await axios.post("http://localhost:3000/payment/initiate", {
@@ -164,12 +193,16 @@ const orderStore = create(persist((set, get) => ({
                         ...state.tableOrders, [tableId]: state.tableOrders[tableId].map(el =>
                             el.id === orderId ? { ...el, paymentStatus: "Completed" } : el
                         )
-                    }
+                    },
+                    currentOrderId: null
                 }))
             }
 
             get().resetTableOrder(tableId)
             return true;
+
+
+
         } catch (error) {
             console.error("Error processing payment:", error);
 
@@ -182,6 +215,8 @@ const orderStore = create(persist((set, get) => ({
             }))
         }
     },
+
+
 }), {
     name: 'orderStore',
     storage: createJSONStorage(() => localStorage)

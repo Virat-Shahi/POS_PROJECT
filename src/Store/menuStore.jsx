@@ -31,6 +31,18 @@ const menuStore = create(persist((set) => ({
             console.log("Error adding menu item",error)
         }
     },
+    actionUpdateMenu: async (id, input) => {
+        try {
+            const resp = await axios.put(`http://localhost:3000/menu/${id}`, input)
+            set(state => ({
+                menuItems: state.menuItems.map(item => 
+                    item.id === id ? resp.data : item
+                )
+            }))
+        } catch (error) {
+            console.log("Error updating menu item", error)
+        }
+    },
     getCategories : async () => {
         try {
             const resp = await axios.get(" http://localhost:3000/category")

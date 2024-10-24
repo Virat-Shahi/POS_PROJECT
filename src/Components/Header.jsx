@@ -7,6 +7,7 @@ const Header = () => {
     const navigate = useNavigate();
 
     const handleLogout = () => {
+        actionLogout();
         console.log('Logout clicked');
         navigate('/login');
     };

@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import tableStore from '../Store/tableStore';
-
+import axios from 'axios';
+import { toast } from 'react-toastify';
 const PaymentOptions = ({ onClose, totalAmount, hdlInitiatePayment, hdlProcessPayment }) => {
 
     const { tableId } = useParams();
@@ -20,9 +21,11 @@ const PaymentOptions = ({ onClose, totalAmount, hdlInitiatePayment, hdlProcessPa
     const hdlConfirmPayment = async () => {
         try {
             if (selectedMethod) {
-                const id = await hdlInitiatePayment(selectedMethod);  // Show the confirmation modal
-                console.log("ID from hdlConfirmPayment: ", id)
-                setPaymentId(id);  // Store the payment ID
+                if(!paymentId) {
+                    const id = await hdlInitiatePayment(selectedMethod);  // Show the confirmation modal
+                    console.log("Confirm PaymentID:", id)
+                    setPaymentId(id);  // Store the payment ID  
+                }
                 setShowPaymentConfirmation(true);
             }
         } catch (error) {
@@ -32,16 +35,30 @@ const PaymentOptions = ({ onClose, totalAmount, hdlInitiatePayment, hdlProcessPa
 
 
     const hdlPaymentConfirmation = (received) => {
-        setShowPaymentConfirmation(false);
         if (received) {
             hdlProcessPayment(paymentId);
-            // Update table status to occupied
             actionUpdateTable(tableId, false);
             onClose();
         } else {
+            setShowPaymentConfirmation(false);
             // Reset selected method if payment was not received
             setSelectedMethod(null);
-            setPaymentId(null);
+        }
+    }
+
+    const resetPayment = async () => {
+        try {
+            if (paymentId) {
+                // Make an API call to delete the payment
+                await axios.delete(`http://localhost:3000/payment/${paymentId}`);
+                setPaymentId(null);
+                setSelectedMethod(null);
+                toast.success("Payment deleted successfully");
+                console.log("Payment deleted successfully");
+            }
+        } catch (error) {
+            toast.error("Error deleting payment");
+            console.log("Payment Deleted Successfully", error);
         }
     }
 
@@ -112,6 +129,15 @@ const PaymentOptions = ({ onClose, totalAmount, hdlInitiatePayment, hdlProcessPa
                             </div>
                         </div>
                     </div>
+                )}
+                
+                {paymentId && !showPaymentConfirmation && (
+                    <button
+                        onClick={resetPayment}
+                        className="w-full mt-4 bg-yellow-500 hover:bg-yellow-600 text-white py-2 rounded transition duration-300"
+                    >
+                        Reset Payment
+                    </button>
                 )}
             </div>
         </div>

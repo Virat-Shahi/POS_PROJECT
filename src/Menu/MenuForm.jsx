@@ -8,7 +8,7 @@ const MenuForm = () => {
 
     useEffect(() => {
         getCategories();
-    }, [getCategories]);
+    }, []);
 
     const [newItems, setNewItems] = useState({
         name: "",
@@ -31,7 +31,7 @@ const MenuForm = () => {
             await actionAddmenu({
                 ...newItems,
                 price: parseFloat(newItems.price),
-                categoryId: parseInt(newItems.categoryId, 10),
+                categoryId: parseInt(newItems.categoryId),
             });
             setNewItems({
                 name: "",

@@ -27,9 +27,9 @@ const TableOrder = () => {
     };
 
     const handleExit = () => {
-        if(tableOrders[tableId].length === 0){
+        if (!tableOrders[tableId] || tableOrders[tableId].length === 0) {
             navigate('/')
-        }else{
+        } else {
             if (window.confirm("There's an existing order. Are you sure you want to exit without placing the order?")) {
                 navigate('/');
             }
@@ -37,10 +37,11 @@ const TableOrder = () => {
     };
 
     const hdlAddToOrder = (item) => {
-        addToOrder(tableId,item);
+        console.log("Adding to Table:", tableId, "Item:", item);
+        addToOrder(tableId, item);
         setIsModified(true);
     };
-    
+
     let filteredItems = menuItems;
     if (currentCategory !== 'All') {
         filteredItems = menuItems.filter(
@@ -104,13 +105,13 @@ const TableOrder = () => {
                                 key={item.id}
                                 className="bg-white shadow-md rounded-lg overflow-hidden hover:shadow-lg transition-shadow duration-300 flex flex-col"
                             >
-                                {item.imageUrl && (
-                                    <img
-                                        src={'https://i.postimg.cc/DZC7JFCd/Untitled-design.png'}
-                                        alt={item.name}
-                                        className="w-full h-48 object-cover"
-                                    />
-                                )}
+
+                                <img
+                                    src={item.imageUrl}
+                                    alt={item.name}
+                                    className="w-full h-48 object-cover"
+                                />
+
                                 <div className="p-4 flex-grow flex flex-col justify-between">
                                     <div>
                                         <h3 className="text-xl font-semibold text-red-600 mb-2">{item.name}</h3>

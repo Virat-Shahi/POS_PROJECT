@@ -8,7 +8,7 @@ import PaymentOptions from '../Payment/PaymentOptions';
 
 
 const Order = (props) => {
-  const {isModified,setIsModified} = props
+  const { isModified, setIsModified } = props
 
   const { tableId } = useParams();
   const createOrder = orderStore((state => state.actionCreateOrder))
@@ -19,10 +19,13 @@ const Order = (props) => {
   const actionUpdateTable = tableStore((state) => state.actionUpdateTable);
   const removeItem = orderStore((state) => state.removeItem)
   const [showPaymentOptions, setShowPaymentOptions] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState(null);
+  const currentOrderId = orderStore((state) => state.currentOrderId);
+  const setCurrentOrderId = orderStore((state) => state.SetCurrentOrderId);
   const initiatePayment = orderStore((state) => state.initiatePayment);
   const processPayment = orderStore((state) => state.processPayment);
   const actionUpdateOrder = orderStore((state) => state.actionUpdateOrder);
+  const actionDeleteOrder = orderStore((state) => state.actionDeleteOrder);
+
   const hdlPlaceOrder = async (token, tableId, tableOrders) => {
     try {
       // Validation If no items in the order
@@ -32,9 +35,9 @@ const Order = (props) => {
       }
       // Place the order
       const order = await createOrder(token, tableId, tableOrders)
-      console.log(order)
-
+      
       if (order) {
+        console.log("Order placed",order)
         // Update table status to occupied
         actionUpdateTable(tableId, true);
         // Set the current order ID
@@ -50,21 +53,20 @@ const Order = (props) => {
     }
   }
 
-  const hdlUpdateOrder = async () => {
+  const hdlUpdateOrder = async (token, currentOrderId, tableId, tableOrders) => {
     try {
       if (!currentOrderId) {
         toast.error("Cannot find order Id. Please add items in order first.")
-        return
       }
       if (!tableOrders || tableOrders.length === 0) {
         toast.error("Cannot update an empty order. Please add items to your order.")
-        return
       }
       if (!isModified) {
         toast.info("No changes detected in the order.")
-        return
       }
-      const result = await actionUpdateOrder(token, currentOrderId, tableId, tableOrders)
+      
+      const result = await actionUpdateOrder(token,currentOrderId, tableId, tableOrders)
+      console.log("order updated", result)
       if (result) {
         toast.success("Order updated successfully.")
         setIsModified(false); // Reset the modified flag after successful update
@@ -77,9 +79,33 @@ const Order = (props) => {
     }
   }
 
+  const hdlCancelOrder = async () => {
+    try {
+      if (!currentOrderId) {
+        toast.error("Cannot find order Id. Please add items in order first.")
+        return
+      }
+
+      // Adding confirmation dialog before canceling the order
+      const isConfirmed = window.confirm("Are you sure you want to cancel this order? This action cannot be undone.");
+
+      if (!isConfirmed) {
+        return; // If user clicks Cancel, stop the function execution
+      }
+      const response = await actionDeleteOrder(token, currentOrderId, tableId);
+      console.log("Order Deleted", response)
+      setCurrentOrderId(null);
+      setIsModified(false);
+      actionUpdateTable(tableId, false)
+      toast.success("Order deleted successfully.")
+    } catch (error) {
+      console.error("Error cancelling order:", error);
+      toast.error("Failed to cancel order. Please try again.");
+    }
+  }
   const hdlRemoveItem = (tableId, itemId) => {
     removeItem(tableId, itemId)
-    setIsModified
+    setIsModified(true)
     toast.success("Item removed from the order.")
   }
 
@@ -116,8 +142,9 @@ const Order = (props) => {
     }
 
     try {
+      console.log(tableId, currentOrderId, paymentMethod, totalAmount)
       const paymentId = await initiatePayment(tableId, currentOrderId, paymentMethod, totalAmount)
-      console.log(paymentId)
+      console.log("CurrentPayment ID :", paymentId)
       if (!paymentId) {
         toast.error("An error occurred while initiating payment. Please try again.")
         return
@@ -134,7 +161,7 @@ const Order = (props) => {
   const hdlProcessPayment = async (paymentId) => {
     try {
       const success = await processPayment(tableId, currentOrderId, paymentId)
-      console.log("SOmething here", success)
+      console.log("Payment Received?", success)
       if (success) {
         toast.success("Payment processed successfully.")
       }
@@ -200,9 +227,13 @@ const Order = (props) => {
           )}
           <button
             onClick={() => hdlPlaceOrder(token, tableId, tableOrders)}
-            className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-3 text-xl font-bold px-4 rounded transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300"
+            disabled={currentOrderId !== null || !tableOrders || tableOrders?.length === 0}
+            className={`w-full mt-4 py-3 text-xl font-bold px-4 rounded transition duration-300 
+              ${currentOrderId === null && tableOrders && tableOrders.length > 0
+                ? "bg-red-500 hover:bg-red-600 text-white focus:outline-none focus:ring-2 focus:ring-red-300"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
           >
-            Place Order
+            {currentOrderId === null ? "Place Order" : "Order Placed"}
           </button>
           <button
             onClick={() => hdlUpdateOrder(token, currentOrderId, tableId, tableOrders)}
@@ -214,6 +245,17 @@ const Order = (props) => {
           >
             Update Order
           </button>
+          <button
+            type='button'
+            onClick={hdlCancelOrder}
+            disabled={!currentOrderId}
+            className={`w-full py-3 text-xl font-bold px-4 rounded transition duration-300 
+              ${currentOrderId
+                ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"}`}
+          >
+            Cancel Order
+          </button>
         </div>
       </div>
       <div className='w-full'>
@@ -223,8 +265,8 @@ const Order = (props) => {
           <p className='text-red-600 text-xl mt-3 font-semibold'>Total: ฿{totalAmount.toFixed(2)}</p>
           <button
             onClick={hdlCheckout}
-            disabled={tableOrders?.length === 0}
-            className={`w-full mt-4 ${tableOrders?.length > 0
+            disabled={!currentOrderId ||tableOrders?.length === 0}
+            className={`w-full mt-4 ${currentOrderId && tableOrders?.length > 0
               ? "bg-red-600 hover:bg-green-500"
               : "bg-gray-400 cursor-not-allowed"
               } text-white py-3 text-xl font-bold px-4 rounded-xl transition duration-300 focus:outline-none focus:ring-2 focus:ring-red-300`}

@@ -20,7 +20,7 @@ const tableStore = create(persist((set) => ({
             
             // After updating, fetch all tables again
             const fetchResponse = await axios.get("http://localhost:3000/table");
-            console.log("Fetched tables after update:", fetchResponse.data);
+            // console.log("Fetched tables after update:", fetchResponse.data);
             set({ tables: fetchResponse.data });
         } catch (error) {
             console.log("Error updating table", error)
